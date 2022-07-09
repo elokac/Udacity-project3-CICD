@@ -100,9 +100,8 @@ jobs:
           command: |    
             cd backend
             npm install
-            npm update --depth=5
+            npm install oauth-sign@^0.9.0
             npm audit --audit-level=critical
-           # npm install oauth-sign@^0.9.0
               
       - save_cache:
           paths: [backend/node_modules]
