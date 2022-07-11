@@ -13,6 +13,24 @@ commands:
           command: |
             aws cloudformation delete-stack --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}"
             aws cloudformation delete-stack --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}"
+  revert_migration:
+    description: Revert the last migration if successfully run in the current workflow.
+    parameters:
+      workflow_id:
+        type: string
+    steps:
+      - run:
+          name: Revert migrations
+          when: on_fail
+          command: |
+            SUCCESS=$(curl --insecure  https://kvdb.io/LPUZtJjPWQ5xteqb8fvtrb/migration_${CIRCLE_WORKFLOW_ID:0:7})
+            if (($SUCCESS == 1))
+            then
+              cd ~/project/backend
+              npm install
+              npm run build
+              npm run migrations:revert
+            fi
 
 jobs:
   build-frontend:
@@ -191,12 +209,54 @@ jobs:
             npm install
             npm run migrations > migrations_dump.txt
       - run:
-          name: Send migration results to memstash
+          name: Send migration status to kvdb.io
+          command: |   
+              if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+              then
+                  curl https://kvdb.io/LPUZtJjPWQ5xteqb8fvtrb/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
+              fi
+      - destroy-environment:
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}    
+  deploy-frontend:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - attach_workspace:
+            at: ~/
+      - run:
+          name: Install dependencies
           command: |
-            # Your code here
-            exit 1
-     # Here's where you will add some code to rollback on failure.     
-
+            apk add --update ansible
+            apk add --update nodejs
+            apk add --update npm
+            apk add --update tar
+            apk add --update gzip
+            pip3 install awscli
+      - run:
+          name: Get backend url
+          command: |
+            export BACKEND_IP=$(aws ec2 describe-instances \
+            --filter "Name=tag:project,Values=Udapeople" \
+            --query "Reservations[*].Instances[*].[PublicIpAddress]" \
+            --output text >> ~/project/.circleci/ansible/inventory.txt)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "API_URL = ${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
+      - destroy-environment:
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert_migration:
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}         
+                   
       
         
 workflows:
@@ -216,3 +276,7 @@ workflows:
           requires: [test-frontend, test-backend, scan-frontend, scan-backend]
       - configure-infrastructure:
           requires: [deploy-infrastructure]
+      - run-migrations:
+          requires: [configure-infrastructure]
+      - deploy-frontend:
+          requires: [run-migrations]
