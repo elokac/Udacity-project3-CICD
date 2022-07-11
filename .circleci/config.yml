@@ -270,12 +270,14 @@ jobs:
           name: Install dependencies
           command: |
             apk add --update ansible
+            ansible --version
             apk add --update nodejs
             apk add --update curl
             apk add --update npm
             apk add --update tar
             apk add --update gzip
             pip3 install awscli
+            aws --version
       - run:
           name: Deploy backend
           command: |
