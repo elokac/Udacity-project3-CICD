@@ -281,6 +281,22 @@ jobs:
             pip3 install awscli
             aws --version
       - run:
+          name: Create env file
+          command: |
+            cd backend
+            touch .env
+            echo "TYPEORM_CONNECTION=postgres" >> .env
+            echo "TYPEORM_MIGRATIONS_DIR=./src/migrations" >> .env
+            echo "TYPEORM_ENTITIES=./src/modules/domain/**/*.entity.ts" >> .env
+            echo "TYPEORM_MIGRATIONS=./src/migrations/*.ts" >> .env
+            # Use these values for the local PG database from the Docker Compose file
+            echo "TYPEORM_HOST=${TYPEORM_HOST}"  >> .env
+            echo "TYPEORM_PORT=${TYPEORM_PORT}" >> .env
+            echo "TYPEORM_USERNAME=${TYPEORM_USERNAME}" >> .env
+            echo "TYPEORM_PASSWORD=${TYPEORM_PASSWORD}" >> .env
+            echo "TYPEORM_DATABASE=${TYPEORM_DATABASE}" >> .env
+            cat .env
+      - run:
           name: Deploy backend
           command: |
             cd backend
@@ -378,7 +394,7 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Get old stack workflow id
+          name: Get old stack workflow id and Remove old stacks/files
           command: |
             export OldWorkflowID=$(aws cloudformation \
             list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
@@ -391,18 +407,13 @@ jobs:
             echo Stack names: "${STACKS[@]}"          
             if [[ "${CIRCLE_WORKFLOW_ID:0:7}" =~ "${OldWorkflowID}" ]]
             then
-              # your code goes here
+              echo "------Deleting Old Stacks and Files........"
+              aws s3 rm "s3://udapeople-${OldWorkflowID}" --recursive
+              aws cloudformation delete-stack --stack-name "udapeople-backend-${OldWorkflowID}"
+              aws cloudformation delete-stack --stack-name "udapeople-frontend-${OldWorkflowID}"
             else
-              # your code goes here
+              echo "no cleanup required"
             fi
-      - run:
-          name: Remove old stacks and files
-          command: |
-            if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
-            then
-              # your code here
-            fi
-
 
 workflows:
   default:
@@ -428,4 +439,8 @@ workflows:
       - deploy-backend:
           requires: [run-migrations]
       - smoke-test:
-          requires: [deploy-backend, deploy-frontend]    
+          requires: [deploy-backend, deploy-frontend] 
+     # - cloudfront-update:
+         # requires: [smoke-test]
+       #- cleanup:
+        #  requires: [cloudfront-update]   
