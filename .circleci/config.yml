@@ -382,19 +382,19 @@ jobs:
                 export OldWorkflowID=$(aws cloudformation \
                 list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
                 --no-paginate --output text)
-                echo $OldWorkflowID >> project/.circleci/ansible/OldWorkflowID.txt
-                cat project/.circleci/ansible/OldWorkflowID.txt      
+                echo $OldWorkflowID >> ~/OldWorkflowID.txt
+                cat ~/OldWorkflowID.txt      
                 aws cloudformation deploy \
                 --template-file .circleci/files/cloudfront.yml \
                 --stack-name InitialStack \
-                --parameter-overrides WorkflowID="udapeople-${CIRCLE_WORKFLOW_ID:0:7}" \
+                --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
                 --tags project=Udapeople
                 echo OldWorkflowID: "${OldWorkflowID}"
                 echo Curent Workflow Id: "${CIRCLE_WORKFLOW_ID:0:7}"
       - persist_to_workspace:
           root: ~/
           paths:
-            - project/.circleci/ansible/OldWorkflowID.txt
+            - OldWorkflowID.txt
       - destroy-environment:
           workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
       - revert_migration:
