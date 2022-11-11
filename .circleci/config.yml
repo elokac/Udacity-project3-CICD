@@ -46,6 +46,8 @@ jobs:
           name: build frontend
           command: |
             cd frontend
+            npm -v
+            node -v
             npm install
             npm run build
       - save_cache:
